@@ -1,0 +1,65 @@
+{
+    "builders": [{
+      "type": "azure-arm",
+  
+      "client_id": "<client-id>",
+      "client_secret": "<client-secret>",
+      "tenant_id": "<tenant-id>",
+      "subscription_id": "<subscription-id>",
+  
+      "managed_image_resource_group_name": "<image-resource-group>",
+      "managed_image_name": "<image-name>",
+  
+      "os_type": "Windows",
+      "image_publisher": "microsoft-dsvm",
+      "image_offer": "dsvm-win-2019",
+      "image_sku": "winserver-2019",
+  
+      "communicator": "winrm",
+      "winrm_use_ssl": true,
+      "winrm_insecure": true,
+      "winrm_timeout": "5m",
+      "winrm_username": "packer",
+  
+      "azure_tags": {
+          "Business Owner": "Research",
+          "Project": "CTSI RSS",
+          "Build": "DSVM-Q422"
+      },
+  
+     "build_resource_group_name": "<Packer-Build-ResourceGroup>",
+      "vm_size": "Standard_D4s_v5",
+      "virtual_network_name": "<private-vnet>",
+		  "virtual_network_subnet_name": "<private-snet>",
+		  "virtual_network_resource_group_name": "<private-vnet-resourcegroup>"
+    }],
+    "provisioners": [{
+        "type": "powershell",
+        "inline": [
+          "Write-Host 'Uninstalling GIT' ",
+          "& $env:ProgramFiles\\Git\\unins000.exe /silent",
+          "Start-Sleep -s 30",
+          "Write-Host 'Uninstalling MS365' ",
+          "& C:\\PROGRA~1\\COMMON~1\\MICROS~1\\ClickToRun\\OfficeClickToRun.exe scenario=install scenariosubtype=ARP sourcetype=None productstoremove=O365ProPlusRetail.16_en-us_x-none culture=en-us version.16=16.0 DisplayLevel=False",
+          "Start-Sleep -s 360",
+          "Write-Host 'Uninstalling OneDrive' ",
+          "if((Test-Path -Path 'C:\\PROGRA~2\\MICROS~1\\21.220.1024.0005\\OneDriveSetup.exe' -PathType Leaf)) {'& C:\\PROGRA~2\\MICROS~1\\21.220.1024.0005\\OneDriveSetup.exe /uninstall /allusers'}",
+          "Start-Sleep -s 300",
+          "Write-Host 'Configuring custom scripts directory' ",
+          "New-Item -Type Directory -Path 'c:\\' -Name temp",
+          "invoke-webrequest -uri 'https://aka.ms/downloadazcopy-v10-windows' -OutFile 'c:\\temp\\azcopy.zip'",
+          "Expand-Archive 'c:\\temp\\azcopy.zip' 'c:\\temp'",
+          "copy-item 'C:\\temp\\azcopy_windows_amd64_*\\azcopy.exe\\' -Destination 'c:\\temp'",
+          "& C:\\Temp\\azcopy copy '<scripts-storage-location>' 'C:\\temp\\scripts.zip' --overwrite=true --check-md5 FailIfDifferent --from-to=FileLocal --preserve-smb-info=true --recursive",
+          "Start-Sleep -s 15",
+          "Expand-Archive 'c:\\temp\\scripts.zip' 'c:\\scripts'",
+          "Write-Host 'Removing Floppy and DVD Drives' ",
+          "Get-PnpDevice -Class cdrom | Disable-PnpDevice -Confirm:$false",
+          "Get-PnpDevice -Class FloppyDisk | Disable-PnpDevice -Confirm:$false",
+          "Write-Host 'Gereralizing System' ",
+          "& $env:SystemRoot\\System32\\Sysprep\\Sysprep.exe /oobe /generalize /quiet /quit", 
+          "while($true) { $imageState = Get-ItemProperty HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Setup\\State | Select ImageState; if($imageState.ImageState -ne 'IMAGE_STATE_GENERALIZE_RESEAL_TO_OOBE') { Write-Output $imageState.ImageState; Start-Sleep -s 10  } else { break } }"
+        ]
+      }
+    ] 
+  }
